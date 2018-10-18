@@ -1,0 +1,11 @@
+"STARTUP.obj",
+"main.obj",
+"I2C.obj",
+"adc.obj",
+"mode.obj",
+"ina219.obj",
+"USART.obj",
+"timer.obj",
+"gpio.obj" 
+TO "core_mcu" 
+RAMSIZE(256) 

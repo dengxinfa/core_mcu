@@ -1,0 +1,121 @@
+C51 COMPILER V9.52.0.0   GPIO                                                              10/18/2018 17:40:32 PAGE 1   
+
+
+C51 COMPILER V9.52.0.0, COMPILATION OF MODULE GPIO
+OBJECT MODULE PLACED IN gpio.OBJ
+COMPILER INVOKED BY: C:\Program Files\C51\BIN\C51.EXE gpio.c LARGE BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include "gpio.h"
+   2          
+   3          u32 GPIO_Value,GPIO_Record;
+   4          u8 WATER_Number;
+   5          
+   6          void GPIO_Set_Read(void)
+   7          {
+   8   1        P0M1  = 0xff;
+   9   1        P0M0  = 0x00;
+  10   1        P2M1  = 0xff;
+  11   1        P2M0  = 0x00;
+  12   1        P3M1 |= 0xfc;
+  13   1        P0M0 &= 0x03;
+  14   1        P4M1 |= 0x0e;
+  15   1        P4M0 &= 0xf1;
+  16   1        P5M1 |= 0x03;
+  17   1        P5M0 &= 0xfc;
+  18   1      }
+  19          
+  20          void GPIO_Set_Write(void)
+  21          {
+  22   1        P0M1  = 0x00;
+  23   1        P0M0  = 0xff;
+  24   1        P2M1  = 0x00;
+  25   1        P2M0  = 0xff;
+  26   1        P3M1 &= 0x03;
+  27   1        P0M0 |= 0xfc;
+  28   1        P4M1 &= 0xf1;
+  29   1        P4M0 |= 0x0e;
+  30   1        P5M1 &= 0xfc;
+  31   1        P5M0 |= 0x03;
+  32   1      }
+  33          
+  34          
+  35          void GET_GPIO_Value(void)
+  36          {
+  37   1        GPIO_Set_Read();
+  38   1        GPIO_Value = 0;
+  39   1        GPIO_Value |= ((u32)P0);
+  40   1        GPIO_Value |= ((u32)P2 << 8);
+  41   1        GPIO_Value |= ((u32)(P3 >> 2) << 16);
+  42   1        GPIO_Value |= ((u32)(P4 << 5) << 17);
+  43   1        GPIO_Value |= ((u32)(P5 << 6) << 19);
+  44   1      }
+  45          
+  46          
+  47          void SET_GPIO_Value(void)
+  48          {
+  49   1        GPIO_Set_Write();
+  50   1        P0 = (u8)GPIO_Value;
+  51   1        P2 = (u8)(GPIO_Value >> 8);
+  52   1        P3 |= (u8)((GPIO_Value >> 16) & 0x3f);
+  53   1        P4 |= (u8)((GPIO_Value >> 22) & 0x07);
+  54   1        P5 |= (u8)(GPIO_Value >> 25);
+  55   1      }
+C51 COMPILER V9.52.0.0   GPIO                                                              10/18/2018 17:40:32 PAGE 2   
+
+  56          
+  57          
+  58          void SET_GPIO_Next(void)
+  59          {
+  60   1        PrintString1("next\r\n");
+  61   1      }
+  62          
+  63          void GPIO_Record_UP(void)
+  64          {
+  65   1        GPIO_Record |= ~GPIO_Value;
+  66   1      }
+  67          
+  68          void GPIO_Record_DOWN(void)
+  69          {
+  70   1        GPIO_Record |= GPIO_Value;
+  71   1      }
+  72          
+  73          void GPIO_Record_WATER(void)
+  74          {
+  75   1        GPIO_Record |= ((~GPIO_Value) & (1<<WATER_Number)); 
+  76   1        GPIO_Record |= (GPIO_Value & (~(1<<WATER_Number))); 
+  77   1      }
+  78          
+  79          void SEND_Hex_Record(void)
+  80          {
+  81   1        u8 i,j=0,buff[10];
+  82   1        buff[0] = '0';
+  83   1        buff[1] = 'x';
+  84   1        for(i=2; i<10; i++)
+  85   1        {
+  86   2          j = (u8)(GPIO_Record >> ((i-2)*4));
+  87   2          j |= 0x0f;
+  88   2          if(j >=10)
+  89   2            buff[i] = j - 10 + 'A';
+  90   2          else
+  91   2            buff[i] = j + '0';
+  92   2        }
+  93   1        PrintString1("GPIO RESULT: ");
+  94   1        PrintString1(buff);
+  95   1        PrintString1("\r\n");
+  96   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    838    ----
+   CONSTANT SIZE    =     24    ----
+   XDATA SIZE       =      9      10
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

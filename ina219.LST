@@ -1,0 +1,287 @@
+C51 COMPILER V9.52.0.0   INA219                                                            10/18/2018 17:40:32 PAGE 1   
+
+
+C51 COMPILER V9.52.0.0, COMPILATION OF MODULE INA219
+OBJECT MODULE PLACED IN ina219.OBJ
+COMPILER INVOKED BY: C:\Program Files\C51\BIN\C51.EXE ina219.c LARGE BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include "ina219.h"
+   2          
+   3          u8 ina219_calValue;
+   4          u8  ina219_busVolt_LSB_mV = 4;   // Bus Voltage LSB value = 4mV
+   5          u8  ina219_shuntVolt_LSB_uV = 10;  // Shunt Voltage LSB value = 10uV
+   6          u32 ina219_current_LSB_uA;
+   7          u32 ina219_power_LSB_mW;
+   8          
+   9          INA219_DATA ina219_20v;
+  10          INA219_DATA ina219_33v;
+  11          s32 INA219_Buff[5];
+  12          
+  13          // INA219 Set Calibration 16V/16A(Max) 0.02Ω
+  14          void ina219_SetCalibration_16V_16A(u8 DEVICE_ADDR)
+  15          {
+  16   1        u16 configValue;
+  17   1        
+  18   1        // By default we use a pretty huge range for the input voltage,
+  19   1        // which probably isn't the most appropriate choice for system
+  20   1        // that don't use a lot of power.  But all of the calculations
+  21   1        // are shown below if you want to change the settings.  You will
+  22   1        // also need to change any relevant register settings, such as
+  23   1        // setting the VBUS_MAX to 16V instead of 32V, etc.
+  24   1        
+  25   1        // VBUS_MAX     = 16V   (Assumes 16V, can also be set to 32V)
+  26   1        // VSHUNT_MAX   = 0.32  (Assumes Gain 8, 320mV, can also be 0.16, 0.08, 0.04)
+  27   1        // RSHUNT       = 0.02   (Resistor value in ohms)
+  28   1        
+  29   1        // 1. Determine max possible current
+  30   1        // MaxPossible_I = VSHUNT_MAX / RSHUNT
+  31   1        // MaxPossible_I = 16A
+  32   1        
+  33   1        // 2. Determine max expected current
+  34   1        // MaxExpected_I = 16A
+  35   1        
+  36   1        // 3. Calculate possible range of LSBs (Min = 15-bit, Max = 12-bit)
+  37   1        // MinimumLSB = MaxExpected_I/32767
+  38   1        // MinimumLSB = 0.00048            (0.48mA per bit)
+  39   1        // MaximumLSB = MaxExpected_I/4096
+  40   1        // MaximumLSB = 0,00390            (3.9mA per bit)
+  41   1        
+  42   1        // 4. Choose an LSB between the min and max values
+  43   1        //    (Preferrably a roundish number close to MinLSB)
+  44   1        // CurrentLSB = 0.00050            (500uA per bit)
+  45   1        
+  46   1        // 5. Compute the calibration register
+  47   1        // Cal = trunc (0.04096 / (Current_LSB * RSHUNT))
+  48   1        // Cal = 4096 (0x1000)
+  49   1        
+  50   1        ina219_calValue = 0x1000;
+  51   1        
+  52   1        // 6. Calculate the power LSB
+  53   1        // PowerLSB = 20 * CurrentLSB
+  54   1        // PowerLSB = 0.01 (10mW per bit)
+  55   1        
+C51 COMPILER V9.52.0.0   INA219                                                            10/18/2018 17:40:32 PAGE 2   
+
+  56   1        // 7. Compute the maximum current and shunt voltage values before overflow
+  57   1        //
+  58   1        // Max_Current = Current_LSB * 32767
+  59   1        // Max_Current = 16.3835A before overflow
+  60   1        //
+  61   1        // If Max_Current > Max_Possible_I then
+  62   1        //    Max_Current_Before_Overflow = MaxPossible_I
+  63   1        // Else
+  64   1        //    Max_Current_Before_Overflow = Max_Current
+  65   1        // End If
+  66   1        //
+  67   1        // Max_ShuntVoltage = Max_Current_Before_Overflow * RSHUNT
+  68   1        // Max_ShuntVoltage = 0.32V
+  69   1        //
+  70   1        // If Max_ShuntVoltage >= VSHUNT_MAX
+  71   1        //    Max_ShuntVoltage_Before_Overflow = VSHUNT_MAX
+  72   1        // Else
+  73   1        //    Max_ShuntVoltage_Before_Overflow = Max_ShuntVoltage
+  74   1        // End If
+  75   1        
+  76   1        // 8. Compute the Maximum Power
+  77   1        // MaximumPower = Max_Current_Before_Overflow * VBUS_MAX
+  78   1        // MaximumPower = 1.6 * 16V
+  79   1        // MaximumPower = 256W
+  80   1        
+  81   1        // Set multipliers to convert raw current/power values
+  82   1        ina219_current_LSB_uA = 480;     // Current LSB = 500uA per bit
+  83   1        ina219_power_LSB_mW = 10;        // Power LSB = 10mW per bit = 20 * Current LSB
+  84   1        
+  85   1        // Set Calibration register to 'Cal' calculated above
+  86   1        //ina219_Write_Register(DEVICE_ADDR, INA219_REG_CALIBRATION, ina219_calValue);
+  87   1        
+  88   1        // Set Config register to take into account the settings above
+  89   1        configValue = ( INA219_CFG_BVOLT_RANGE_16V | INA219_CFG_SVOLT_RANGE_320MV | INA219_CFG_BADCRES_12BIT_16S
+             -_8MS | INA219_CFG_SADCRES_12BIT_16S_8MS | INA219_CFG_MODE_SANDBVOLT_CONTINUOUS );
+  90   1        
+  91   1        ina219_Write_Register_Init(DEVICE_ADDR, INA219_REG_CONFIG, configValue);
+  92   1      }
+  93          
+  94          void ina219_configureRegisters(void)
+  95          {
+  96   1        delay_ms(15);
+  97   1        
+  98   1        ina219_SetCalibration_16V_16A(INA219_20V);
+  99   1        ina219_SetCalibration_16V_16A(INA219_33V);
+ 100   1      }
+ 101          
+ 102          
+ 103          void INA219_Init(void)
+ 104          {  
+ 105   1        ina219_configureRegisters();
+ 106   1      }
+ 107          
+ 108          
+ 109          /* 这里以上是初始化函数 */
+ 110          /* 从这里往下是功能函数 */
+ 111          
+ 112          
+ 113          //s16 ina219_GetBusVoltage_raw(u8 DEVICE_ADDR)
+ 114          //{
+ 115          //  s16 val;
+ 116          //  
+C51 COMPILER V9.52.0.0   INA219                                                            10/18/2018 17:40:32 PAGE 3   
+
+ 117          //  ina219_Read_Register(DEVICE_ADDR, INA219_REG_BUSVOLTAGE, &val);
+ 118          //  val >>= 3;                      // Shift to the right 3 to drop CNVR and OVF
+ 119          //  
+ 120          //  return (val);
+ 121          //}
+ 122          
+ 123          //s16 ina219_GetCurrent_raw(u8 DEVICE_ADDR)
+ 124          //{
+ 125          //  s16 val;
+ 126          //  
+ 127          //  // Sometimes a sharp load will reset the INA219, which will
+ 128          //  // reset the cal register, meaning CURRENT and POWER will
+ 129          //  // not be available ... avoid this by always setting a cal
+ 130          //  // value even if it's an unfortunate extra step
+ 131          //  ina219_Write_Register(DEVICE_ADDR, INA219_REG_CALIBRATION, ina219_calValue);
+ 132          //  
+ 133          //  // Now we can safely read the CURRENT register!
+ 134          //  ina219_Read_Register(DEVICE_ADDR, INA219_REG_CURRENT, &val);
+ 135          //  
+ 136          //  return (val);
+ 137          //}
+ 138          
+ 139          
+ 140          //s16 ina219_GetBusVoltage_mV(u8 DEVICE_ADDR)
+ 141          //{
+ 142          //  s16 val;
+ 143          //  
+ 144          //  ina219_Read_Register(DEVICE_ADDR, INA219_REG_BUSVOLTAGE, &val);
+ 145          //  val >>= 3;                      // Shift to the right 3 to drop CNVR and OVF
+ 146          //  val *= ina219_busVolt_LSB_mV;   // multiply by LSB(4mV)
+ 147          //  
+ 148          //  return (val);
+ 149          //}
+ 150          
+ 151          //s32 ina219_GetShuntVoltage_uV(u8 DEVICE_ADDR)
+ 152          //{
+ 153          //  s32 val;
+ 154          //  s16 reg;
+ 155          //  
+ 156          //  ina219_Read_Register(DEVICE_ADDR, INA219_REG_SHUNTVOLTAGE, &reg);
+ 157          //  val = (s32)reg * ina219_shuntVolt_LSB_uV;   // multiply by LSB(10uV)
+ 158          //  
+ 159          //  return (val);
+ 160          //}
+ 161          
+ 162          s32 ina219_GetCurrent_uA(u8 DEVICE_ADDR)
+ 163          {
+ 164   1        s32 val;
+ 165   1        s16 reg;
+ 166   1        
+ 167   1        // Sometimes a sharp load will reset the INA219, which will
+ 168   1        // reset the cal register, meaning CURRENT and POWER will
+ 169   1        // not be available ... avoid this by always setting a cal
+ 170   1        // value even if it's an unfortunate extra step
+ 171   1        ina219_Write_Register(DEVICE_ADDR, INA219_REG_CALIBRATION, ina219_calValue);
+ 172   1        
+ 173   1        // Now we can safely read the CURRENT register!
+ 174   1        ina219_Read_Register(DEVICE_ADDR, INA219_REG_CURRENT, &reg);
+ 175   1        
+ 176   1        val = (s32)reg * ina219_current_LSB_uA;
+ 177   1        
+ 178   1        return (val);
+C51 COMPILER V9.52.0.0   INA219                                                            10/18/2018 17:40:32 PAGE 4   
+
+ 179   1      }
+ 180          
+ 181          //s32 ina219_GetPower_mW(u8 DEVICE_ADDR)
+ 182          //{
+ 183          //  s32 val;
+ 184          //  s16 reg;
+ 185          //  
+ 186          //  // Sometimes a sharp load will reset the INA219, which will
+ 187          //  // reset the cal register, meaning CURRENT and POWER will
+ 188          //  // not be available ... avoid this by always setting a cal
+ 189          //  // value even if it's an unfortunate extra step
+ 190          //  ina219_Write_Register(DEVICE_ADDR,INA219_REG_CALIBRATION,ina219_calValue);
+ 191          //  // Now we can safely read the POWER register!
+ 192          //  ina219_Read_Register(DEVICE_ADDR, INA219_REG_POWER, &reg);
+ 193          //  
+ 194          //  val = (s32)reg * ina219_power_LSB_mW;
+ 195          //  
+ 196          //  return (val);
+ 197          //}
+ 198          
+ 199          s32 INA219_Filter(void)    //中值滤波
+ 200          {
+ 201   1        u8 i;
+ 202   1        u16 temp;
+ 203   1        for(i=1; i<6; i++)    //切换通道后第一次转换结果丢弃. 避免采样电容的残存电压影响.
+ 204   1          if(INA219_Buff[i] > INA219_Buff[i+1])
+ 205   1          {
+ 206   2            temp = INA219_Buff[i];
+ 207   2            INA219_Buff[i] = INA219_Buff[i+1];
+ 208   2            INA219_Buff[i+1] = temp;
+ 209   2          }     
+ 210   1        return INA219_Buff[3];
+ 211   1      }
+ 212          
+ 213          void INA_Current_To_ASCII(s32 current_data)
+ 214          {
+ 215   1        u8 buff[7];
+ 216   1        current_data /= 1000;
+ 217   1        buff[0] = current_data/1000 + '0';
+ 218   1        buff[1] = current_data%1000/100 + '0';
+ 219   1        buff[2] = current_data%100/10 + '0';
+ 220   1        buff[3] = current_data%10 + '0';
+ 221   1        buff[4] =  'm';
+ 222   1        buff[5] =  'A';
+ 223   1        buff[6] =  0;
+ 224   1        PrintString1(buff);
+ 225   1      }
+ 226          
+ 227          void INA_Send_Current(void)
+ 228          {
+ 229   1        PrintString1("3.3V_2.0V_Current: ");
+ 230   1        INA_Current_To_ASCII(ina219_33v.current_ina219);
+ 231   1        PrintString1(" ");
+ 232   1        INA_Current_To_ASCII(ina219_20v.current_ina219);
+ 233   1        PrintString1("\r\n");
+ 234   1      }
+ 235          
+ 236          void INA_Process(void)
+ 237          { 
+ 238   1        u8 i;
+ 239   1        for(i=0;i<5;i++)
+ 240   1          INA219_Buff[i] = ina219_GetCurrent_uA(INA219_20V); 
+C51 COMPILER V9.52.0.0   INA219                                                            10/18/2018 17:40:32 PAGE 5   
+
+ 241   1        ina219_20v.current_ina219 = INA219_Filter;
+ 242   1        for(i=0;i<5;i++)
+ 243   1          INA219_Buff[i] = ina219_GetCurrent_uA(INA219_33V); 
+ 244   1        ina219_33v.current_ina219 = INA219_Filter;
+ 245   1        
+ 246   1      //  ina219_20v.voltage_ina219 = ina219_GetBusVoltage_mV(INA219_20V);      
+ 247   1      //  ina219_20v.shunt_ina219 = ina219_GetShuntVoltage_uV(INA219_20V);           
+ 248   1      //  ina219_20v.current_ina219 = ina219_GetCurrent_uA(INA219_20V);       
+ 249   1      //  ina219_20v.power_ina219 = ina219_GetPower_mW(INA219_20V);
+ 250   1      //  
+ 251   1      //  ina219_33v.voltage_ina219 = ina219_GetBusVoltage_mV(INA219_33V);      
+ 252   1      //  ina219_33v.shunt_ina219 = ina219_GetShuntVoltage_uV(INA219_33V);           
+ 253   1      //  ina219_33v.current_ina219 = ina219_GetCurrent_uA(INA219_33V);       
+ 254   1      //  ina219_33v.power_ina219 = ina219_GetPower_mW(INA219_33V);
+ 255   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    713    ----
+   CONSTANT SIZE    =     25    ----
+   XDATA SIZE       =     59      18
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

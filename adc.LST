@@ -1,0 +1,123 @@
+C51 COMPILER V9.52.0.0   ADC                                                               10/18/2018 17:40:32 PAGE 1   
+
+
+C51 COMPILER V9.52.0.0, COMPILATION OF MODULE ADC
+OBJECT MODULE PLACED IN adc.OBJ
+COMPILER INVOKED BY: C:\Program Files\C51\BIN\C51.EXE adc.c LARGE BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include "adc.h"
+   2          
+   3          ADC_v ADC;
+   4          u16 ADC_Buff[6];
+   5          
+   6          void ENABLE_ADC_Convert(void)
+   7          {
+   8   1        ADC_CONTR |= 0x40;
+   9   1      }
+  10          
+  11          void ADC_Channel_Select(u8 channel)
+  12          {
+  13   1        ADC_CONTR |= channel;
+  14   1      }
+  15          
+  16          void ADC_Init(void)
+  17          {
+  18   1        P1M0 = 0x00;
+  19   1        P1M1 = 0x8c;      //p1.2、p1.3、p1.7高阻输入
+  20   1        
+  21   1        ADCCFG = 0x0f;    //设置ADC时钟为系统时钟2/16/16
+  22   1        ADC_CONTR = 0x80;//开启ADC转化电源
+  23   1        EADC   = 1;       //是能ADC中断
+  24   1      }
+  25          
+  26          void ADC_Voltage_To_ASCII(u16 voltage_data)
+  27          {
+  28   1        u8 buff[7];
+  29   1        buff[0] = voltage_data/1000 + '0';
+  30   1        buff[1] = voltage_data%1000/100 + '0';
+  31   1        buff[2] = voltage_data%100/10 + '0';
+  32   1        buff[3] = voltage_data%10 + '0';
+  33   1        buff[4] =  'm';
+  34   1        buff[5] =  'V';
+  35   1        buff[6] =  0;
+  36   1        PrintString1(buff);
+  37   1      }
+  38          
+  39          void ADC_Send_Current(void)
+  40          {
+  41   1        PrintString1("3.3V_2.5V_2.0V_Voltage: ");
+  42   1        ADC_Voltage_To_ASCII(ADC.V3_3);
+  43   1        PrintString1(" ");
+  44   1        ADC_Voltage_To_ASCII(ADC.V2_5);
+  45   1        PrintString1(" ");
+  46   1        ADC_Voltage_To_ASCII(ADC.V2_0);
+  47   1        PrintString1("\r\n");
+  48   1      }
+  49          
+  50          u16 ADC_Filter(void)    //中值滤波
+  51          {
+  52   1        u8 i;
+  53   1        u16 temp;
+  54   1        for(i=1; i<6; i++)    //切换通道后第一次转换结果丢弃. 避免采样电容的残存电压影响.
+  55   1          if(ADC_Buff[i] > ADC_Buff[i+1])
+C51 COMPILER V9.52.0.0   ADC                                                               10/18/2018 17:40:32 PAGE 2   
+
+  56   1          {
+  57   2            temp = ADC_Buff[i];
+  58   2            ADC_Buff[i] = ADC_Buff[i+1];
+  59   2            ADC_Buff[i+1] = temp;
+  60   2          }     
+  61   1        return ADC_Buff[3];
+  62   1      }
+  63          
+  64          void ADC_Isr() interrupt 5 using 1
+  65          {
+  66   1        static i = 0,j = 0;
+  67   1        ADC_CONTR &= ~0x20;
+  68   1          
+  69   1        if(i++ >= 6)
+  70   1        {
+  71   2          if(++j == 1)     //读取3.3V
+  72   2          {
+  73   3            ADC.V3_3 = ADC_Filter();
+  74   3            ADC_Channel_Select(CHN_V2_5);
+  75   3          }
+  76   2          else if(j == 2) //读取2.5V
+  77   2          {
+  78   3            ADC.V2_5 = ADC_Filter();
+  79   3            ADC_Channel_Select(CHN_V2_0);
+  80   3          }
+  81   2          else            //读取2.0V
+  82   2          {
+  83   3            ADC.V2_0 = ADC_Filter();
+  84   3            ADC_Channel_Select(CHN_V3_3);
+  85   3            i = 0;
+  86   3            j = 0;
+  87   3            set_mode(ADC_STATUS);
+  88   3            set_mode(ADC_END);
+  89   3          }
+  90   2        }
+  91   1        else
+  92   1          ADC_Buff[i] = ADC_RES * 256 + ADC_RESL;
+  93   1          
+  94   1        if(!get_mode(ADC_STATUS))
+  95   1          ENABLE_ADC_Convert();
+  96   1        else
+  97   1          reset_mode(ADC_STATUS);
+  98   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    528    ----
+   CONSTANT SIZE    =     30    ----
+   XDATA SIZE       =     22       9
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
